@@ -161,5 +161,149 @@ router.post(
         }
     }
 );
+// Get items owned by the logged-in user
+router.get("/my-items", authMiddleware, async (req, res) => {
+    try {
+        const [items] = await db.query(
+            `SELECT
+                items.*,
+                categories.category_name AS category_name,
+                users.full_name AS owner_name
+             FROM items
+             LEFT JOIN categories
+                ON items.category_id = categories.id
+             JOIN users
+                ON items.user_id = users.id
+             WHERE items.user_id = ?
+             ORDER BY items.created_at DESC`,
+            [req.user.id]
+        );
+
+        res.json(items);
+    } catch (error) {
+        console.error("Get my items error:", error);
+
+        res.status(500).json({
+            message: "Failed to retrieve your items."
+        });
+    }
+});
+
+
+// Update an item owned by the logged-in user
+router.put("/:id", authMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const {
+            title,
+            description,
+            category_id,
+            condition_status,
+            location,
+            desired_exchange
+        } = req.body;
+
+        if (
+            !title?.trim() ||
+            !description?.trim() ||
+            !category_id ||
+            !condition_status ||
+            !location?.trim() ||
+            !desired_exchange?.trim()
+        ) {
+            return res.status(400).json({
+                message: "Please complete all required fields."
+            });
+        }
+
+        const validConditions = [
+            "New",
+            "Like New",
+            "Good",
+            "Fair",
+            "Poor"
+        ];
+
+        if (!validConditions.includes(condition_status)) {
+            return res.status(400).json({
+                message: "Invalid item condition."
+            });
+        }
+
+        const [result] = await db.query(
+            `UPDATE items
+             SET
+                category_id = ?,
+                title = ?,
+                description = ?,
+                condition_status = ?,
+                location = ?,
+                desired_exchange = ?
+             WHERE id = ?
+             AND user_id = ?
+             AND status = 'Available'`,
+            [
+                category_id,
+                title.trim(),
+                description.trim(),
+                condition_status,
+                location.trim(),
+                desired_exchange.trim(),
+                id,
+                req.user.id
+            ]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                message: "Item not found, not owned by you, or unavailable for editing."
+            });
+        }
+
+        res.json({
+            message: "Item updated successfully!"
+        });
+    } catch (error) {
+        console.error("Update item error:", error);
+
+        res.status(500).json({
+            message: "Failed to update item."
+        });
+    }
+});
+
+
+// Soft-delete an item owned by the logged-in user
+router.delete("/:id", authMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [result] = await db.query(
+            `UPDATE items
+             SET status = 'Inactive'
+             WHERE id = ?
+             AND user_id = ?
+             AND status = 'Available'`,
+            [id, req.user.id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                message: "Item not found, not owned by you, or unavailable for deletion."
+            });
+        }
+
+        res.json({
+            message: "Item deleted successfully!"
+        });
+    } catch (error) {
+        console.error("Delete item error:", error);
+
+        res.status(500).json({
+            message: "Failed to delete item."
+        });
+    }
+});
 
 module.exports = router;

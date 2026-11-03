@@ -3435,3 +3435,335 @@ button {
   height: 100%;
   box-sizing: border-box;
 }
+
+.proposal-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.proposal-modal {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 30px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.proposal-modal h2 {
+  margin: 0 0 8px;
+  color: #164e3d;
+}
+
+.proposal-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  border: none;
+  background: none;
+  font-size: 30px;
+  cursor: pointer;
+}
+
+.proposal-requested-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 18px 0;
+  padding: 15px;
+  border-radius: 10px;
+  background: #edf7f1;
+}
+
+.proposal-requested-item strong {
+  color: #176344;
+}
+
+.proposal-requested-item span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.proposal-modal .form-group {
+  margin-bottom: 18px;
+}
+
+.proposal-modal select,
+.proposal-modal textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.proposal-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 500px) {
+  .proposal-modal {
+    padding: 24px 18px;
+  }
+
+  .proposal-modal-actions {
+    flex-direction: column;
+  }
+
+  .proposal-modal-actions button {
+    width: 100%;
+  }
+}
+/* =====================================
+   BARTERHUB - PREMIUM PROPOSE TRADE MODAL
+===================================== */
+
+.proposal-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(8, 25, 19, 0.72);
+  backdrop-filter: blur(7px);
+  animation: proposalFadeIn 0.2s ease;
+}
+
+.proposal-modal {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 34px;
+  border: 1px solid #e3eee7;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25);
+  animation: proposalSlideUp 0.25s ease;
+}
+
+.proposal-modal h2 {
+  margin: 0 0 10px;
+  color: #145c3e;
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+}
+
+.proposal-modal > p {
+  margin: 0;
+  color: #718078;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.proposal-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 12px;
+  background: #f0f6f2;
+  color: #315c47;
+  font-size: 25px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.proposal-modal-close:hover {
+  background: #dcece1;
+  transform: rotate(90deg);
+}
+
+.proposal-requested-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 22px 0;
+  padding: 19px;
+  border: 1px solid #d9ebdf;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f0f9f3, #e5f3e9);
+}
+
+.proposal-requested-item::before {
+  content: "ITEM YOU WANT";
+  color: #43815d;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.proposal-requested-item strong {
+  color: #174f35;
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.proposal-requested-item span {
+  color: #718078;
+  font-size: 13px;
+}
+
+.proposal-modal .form-group {
+  margin-bottom: 21px;
+}
+
+.proposal-modal .form-group label {
+  display: block;
+  margin-bottom: 9px;
+  color: #263d31;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.proposal-modal select,
+.proposal-modal textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #dce7df;
+  border-radius: 12px;
+  outline: none;
+  background: #fbfdfb;
+  color: #263d31;
+  font-family: inherit;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.proposal-modal select {
+  min-height: 49px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.proposal-modal textarea {
+  min-height: 110px;
+  padding: 14px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.proposal-modal select:focus,
+.proposal-modal textarea:focus {
+  border-color: #26945d;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(38, 148, 93, 0.10);
+}
+
+.proposal-modal textarea::placeholder {
+  color: #a0ada4;
+}
+
+.proposal-modal .form-group small {
+  display: block;
+  margin-top: 9px;
+  color: #b45309;
+  font-size: 12px;
+}
+
+.proposal-modal .form-error {
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.proposal-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.proposal-modal-actions button {
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.proposal-modal-actions .secondary-button {
+  border: 1px solid #dce7df;
+  background: #ffffff;
+  color: #52665a;
+}
+
+.proposal-modal-actions .secondary-button:hover {
+  border-color: #9ab8a3;
+  background: #f3f8f4;
+}
+
+.proposal-modal-actions .primary-button {
+  border: none;
+  background: linear-gradient(135deg, #18784b, #105b39);
+  color: #ffffff;
+  box-shadow: 0 5px 14px rgba(16, 91, 57, 0.18);
+}
+
+.proposal-modal-actions .primary-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(16, 91, 57, 0.25);
+}
+
+.proposal-modal-actions .primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes proposalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes proposalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(15px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 520px) {
+  .proposal-modal {
+    padding: 27px 20px;
+    border-radius: 19px;
+  }
+
+  .proposal-modal h2 {
+    font-size: 23px;
+  }
+
+  .proposal-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .proposal-modal-actions button {
+    width: 100%;
+  }
+}

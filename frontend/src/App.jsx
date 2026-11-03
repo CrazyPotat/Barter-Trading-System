@@ -72,12 +72,14 @@ const [profileSuccess, setProfileSuccess] = useState("");
     desired_exchange: "",
   });
 
-  const [image, setImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState("");
+ const [image, setImage] = useState(null);
+const [imagePreview, setImagePreview] = useState("");
 
-  const [items, setItems] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [proposals, setProposals] = useState([]);
+const [items, setItems] = useState([]);
+const [myItems, setMyItems] = useState([]);
+const [categories, setCategories] = useState([]);
+
+const [proposals, setProposals] = useState([]);
 const [proposalsLoading, setProposalsLoading] = useState(false);
 const [proposalError, setProposalError] = useState("");
 const [selectedTradeItem, setSelectedTradeItem] = useState(null);
@@ -160,39 +162,68 @@ const handleChangePassword = async (e) => {
     setPasswordLoading(false);
   }
 };
-  // Load categories and available items
-  const loadData = async () => {
-    setItemsLoading(true);
+  // Load public items, own listings, and categories
+const loadData = async () => {
+  setItemsLoading(true);
+  setItemError("");
 
-    try {
-      const [itemsResponse, categoriesResponse] = await Promise.all([
-        fetch(ITEM_API_URL),
-        fetch(`${ITEM_API_URL}/categories`),
-      ]);
+  const token = localStorage.getItem("barterToken");
 
-      const itemsData = await itemsResponse.json();
-      const categoriesData = await categoriesResponse.json();
+  try {
+    const requests = [
+      fetch(ITEM_API_URL),
+      fetch(`${ITEM_API_URL}/categories`),
+    ];
 
-      if (!itemsResponse.ok) {
-        throw new Error(itemsData.message || "Failed to load items.");
-      }
+    if (token) {
+      requests.push(
+        fetch(`${ITEM_API_URL}/my-items`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+      );
+    }
 
-      if (!categoriesResponse.ok) {
+    const responses = await Promise.all(requests);
+
+    const itemsData = await responses[0].json();
+    const categoriesData = await responses[1].json();
+
+    if (!responses[0].ok) {
+      throw new Error(itemsData.message || "Failed to load items.");
+    }
+
+    if (!responses[1].ok) {
+      throw new Error(
+        categoriesData.message || "Failed to load categories."
+      );
+    }
+
+    setItems(Array.isArray(itemsData) ? itemsData : []);
+    setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+
+    if (token) {
+      const myItemsData = await responses[2].json();
+
+      if (!responses[2].ok) {
         throw new Error(
-          categoriesData.message || "Failed to load categories."
+          myItemsData.message || "Failed to load your listings."
         );
       }
 
-      setItems(Array.isArray(itemsData) ? itemsData : []);
-      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
-    } catch (err) {
-      console.error("Loading error:", err);
-      setItemError(err.message || "Unable to load items.");
-    } finally {
-      setItemsLoading(false);
+      setMyItems(Array.isArray(myItemsData) ? myItemsData : []);
+    } else {
+      setMyItems([]);
     }
-  };
- 
+  } catch (err) {
+    console.error("Loading error:", err);
+    setItemError(err.message || "Unable to load items.");
+  } finally {
+    setItemsLoading(false);
+  }
+};
+// LOAD TRADE PROPOSALS
 const loadProposals = async () => {
   const token = localStorage.getItem("barterToken");
 
@@ -219,46 +250,12 @@ const loadProposals = async () => {
 
     setProposals(Array.isArray(data) ? data : []);
   } catch (err) {
-    setProposalError(err.message);
+    console.error("PROPOSALS ERROR:", err);
+    setProposalError(err.message || "Unable to load proposals.");
   } finally {
     setProposalsLoading(false);
   }
 };
-
-// LOAD TRADE HISTORY
-const loadTradeHistory = async () => {
-  const token = localStorage.getItem("barterToken");
-
-  if (!token) return;
-
-  setHistoryLoading(true);
-  setHistoryError("");
-
-  try {
-    const response = await fetch(
-      "https://barter-trading-system.onrender.com/api/trades/history",
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || "Failed to load trade history.");
-    }
-
-    setTradeHistory(Array.isArray(data) ? data : []);
-  } catch (err) {
-    console.error("TRADE HISTORY ERROR:", err);
-    setHistoryError(err.message || "Unable to load trade history.");
-  } finally {
-    setHistoryLoading(false);
-  }
-};
-
 // LOAD USER PROFILE
 const loadProfile = async () => {
   const token = localStorage.getItem("barterToken");
@@ -682,10 +679,6 @@ useEffect(() => {
       setItemSubmitting(false);
     }
   };
-
-  const myItems = items.filter(
-    (item) => Number(item.user_id) === Number(user?.id)
-  );
 
   const filteredItems = (view === "my-items" ? myItems : items).filter(
     (item) => {
@@ -1355,19 +1348,22 @@ useEffect(() => {
           </div>
 
           {view === "browse" && !isOwnItem && (
-            <button
-              className="primary-button propose-button"
-              onClick={() => {
-                setSelectedTradeItem(item);
-                setSelectedOfferedItem("");
-                setProposalMessage("");
-                setProposalError("");
-              }}
-            >
-              <ArrowRightLeft size={17} />
-              Propose Trade
-            </button>
-          )}
+  <button
+    type="button"
+    className="primary-button propose-button"
+    onClick={() => {
+      console.log("PROPOSE TRADE CLICKED:", item);
+
+      setSelectedTradeItem(item);
+      setSelectedOfferedItem("");
+      setProposalMessage("");
+      setProposalError("");
+    }}
+  >
+    <ArrowRightLeft size={17} />
+    Propose Trade
+  </button>
+)}
         </div>
       </article>
     );
@@ -1973,6 +1969,102 @@ view === "history" ? (
             </form>
     </div>
   </section>
+)}
+
+{selectedTradeItem && (
+  <div className="proposal-modal-overlay">
+    <div className="proposal-modal">
+      <button
+        type="button"
+        className="proposal-modal-close"
+        onClick={() => setSelectedTradeItem(null)}
+      >
+        ×
+      </button>
+
+      <h2>Propose a Trade</h2>
+      <p>
+        Offer one of your items in exchange for:
+      </p>
+
+      <div className="proposal-requested-item">
+        <strong>{selectedTradeItem.title}</strong>
+        <span>
+          Owner: {selectedTradeItem.owner_name || "Member"}
+        </span>
+      </div>
+
+      <form onSubmit={handleSendProposal}>
+        <div className="form-group">
+          <label>Select Your Item to Offer *</label>
+
+          <select
+            value={selectedOfferedItem}
+            onChange={(e) =>
+              setSelectedOfferedItem(e.target.value)
+            }
+            required
+          >
+            <option value="">Select one of your items</option>
+
+            {myItems.map((item) => (
+              <option
+                key={item.id}
+                value={item.id}
+                disabled={Number(item.id) === Number(selectedTradeItem.id)}
+              >
+                {item.title}
+              </option>
+            ))}
+          </select>
+
+          {myItems.length === 0 && (
+            <small>
+              You need to upload an item before proposing a trade.
+            </small>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label>Message (Optional)</label>
+          <textarea
+            value={proposalMessage}
+            onChange={(e) =>
+              setProposalMessage(e.target.value)
+            }
+            placeholder="Write a message to the item owner..."
+            rows={4}
+          />
+        </div>
+
+        {proposalError && (
+          <p className="form-error">{proposalError}</p>
+        )}
+
+        <div className="proposal-modal-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setSelectedTradeItem(null)}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={
+              proposalSubmitting ||
+              !selectedOfferedItem ||
+              myItems.length === 0
+            }
+          >
+            {proposalSubmitting ? "Sending..." : "Send Proposal"}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 )}
 
 <footer className="dashboard-footer">
