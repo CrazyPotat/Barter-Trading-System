@@ -256,6 +256,44 @@ const loadProposals = async () => {
     setProposalsLoading(false);
   }
 };
+
+// LOAD TRADE HISTORY
+const loadTradeHistory = async () => {
+  const token = localStorage.getItem("barterToken");
+
+  if (!token) {
+    setHistoryError("Please log in again.");
+    return;
+  }
+
+  setHistoryLoading(true);
+  setHistoryError("");
+
+  try {
+    const response = await fetch(
+      "https://barter-trading-system.onrender.com/api/trades/history",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to load trade history.");
+    }
+
+    setTradeHistory(Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.error("TRADE HISTORY ERROR:", err);
+    setHistoryError(err.message || "Unable to load trade history.");
+  } finally {
+    setHistoryLoading(false);
+  }
+};
+
 // LOAD USER PROFILE
 const loadProfile = async () => {
   const token = localStorage.getItem("barterToken");

@@ -118,8 +118,8 @@ router.post(
             }
 
             const image = req.file
-                ? `/uploads/${req.file.filename}`
-                : null;
+    ? req.file.path
+    : null;
 
             const [result] = await db.query(
                 `INSERT INTO items
