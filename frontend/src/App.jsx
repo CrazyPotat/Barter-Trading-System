@@ -71,6 +71,20 @@ const [profileSuccess, setProfileSuccess] = useState("");
     location: "",
     desired_exchange: "",
   });
+  // EDIT ITEM STATES
+const [editingItem, setEditingItem] = useState(null);
+
+const [editForm, setEditForm] = useState({
+  title: "",
+  description: "",
+  category_id: "",
+  condition_status: "Good",
+  location: "",
+  desired_exchange: "",
+});
+
+const [editSubmitting, setEditSubmitting] = useState(false);
+const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
  const [image, setImage] = useState(null);
 const [imagePreview, setImagePreview] = useState("");
@@ -717,7 +731,114 @@ useEffect(() => {
       setItemSubmitting(false);
     }
   };
+// OPEN EDIT ITEM
+const openEditItem = (item) => {
+  setEditingItem(item);
 
+  setEditForm({
+    title: item.title || "",
+    description: item.description || "",
+    category_id: String(item.category_id || ""),
+    condition_status: item.condition_status || "Good",
+    location: item.location || "",
+    desired_exchange: item.desired_exchange || "",
+  });
+
+  setItemError("");
+  setItemSuccess("");
+};
+
+// UPDATE ITEM
+const handleUpdateItem = async (e) => {
+  e.preventDefault();
+
+  setItemError("");
+  setItemSuccess("");
+
+  const token = localStorage.getItem("barterToken");
+
+  if (!token || !editingItem) {
+    setItemError("Please log in again.");
+    return;
+  }
+
+  setEditSubmitting(true);
+
+  try {
+    const response = await fetch(
+      `${ITEM_API_URL}/${editingItem.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(editForm),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to update item.");
+    }
+
+    setEditingItem(null);
+    setItemSuccess("Item updated successfully!");
+
+    await loadData();
+  } catch (err) {
+    setItemError(err.message || "Unable to update item.");
+  } finally {
+    setEditSubmitting(false);
+  }
+};
+
+// DELETE ITEM
+const handleDeleteItem = async (item) => {
+  const confirmed = window.confirm(
+    `Are you sure you want to delete "${item.title}"?`
+  );
+
+  if (!confirmed) return;
+
+  const token = localStorage.getItem("barterToken");
+
+  if (!token) {
+    setItemError("Please log in again.");
+    return;
+  }
+
+  setDeleteSubmitting(true);
+  setItemError("");
+  setItemSuccess("");
+
+  try {
+    const response = await fetch(
+      `${ITEM_API_URL}/${item.id}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to delete item.");
+    }
+
+    setItemSuccess("Item deleted successfully!");
+
+    await loadData();
+  } catch (err) {
+    setItemError(err.message || "Unable to delete item.");
+  } finally {
+    setDeleteSubmitting(false);
+  }
+};
   const filteredItems = (view === "my-items" ? myItems : items).filter(
     (item) => {
       const keyword = searchTerm.toLowerCase();
@@ -1384,6 +1505,26 @@ useEffect(() => {
             </div>
             <span>{item.owner_name || "Member"}</span>
           </div>
+          {view === "my-items" && isOwnItem && (
+  <div className="item-management-actions">
+    <button
+      type="button"
+      className="secondary-button"
+      onClick={() => openEditItem(item)}
+    >
+      Edit
+    </button>
+
+    <button
+      type="button"
+      className="danger-button"
+      onClick={() => handleDeleteItem(item)}
+      disabled={deleteSubmitting}
+    >
+      {deleteSubmitting ? "Deleting..." : "Delete"}
+    </button>
+  </div>
+)}
 
           {view === "browse" && !isOwnItem && (
   <button
@@ -1659,8 +1800,7 @@ useEffect(() => {
   </section>
 )}
 
-{["history", "profile", "settings"].includes(view) &&   
-view === "history" ? (
+{view === "history" ? (
   <section className="page-section history-page">
     <div className="page-heading">
       <div>
@@ -1891,8 +2031,7 @@ view === "history" ? (
       </form>
     )}
   </section>
-) : (
-  
+) : view === "settings" ? (
   <section className="page-section settings-page">
     <div className="page-heading settings-heading">
   <div className="settings-brand">
@@ -2007,6 +2146,134 @@ view === "history" ? (
             </form>
     </div>
   </section>
+) : null}
+{editingItem && (
+  <div className="proposal-modal-overlay">
+    <div className="proposal-modal edit-item-modal">
+      <button
+        type="button"
+        className="proposal-modal-close"
+        onClick={() => setEditingItem(null)}
+      >
+        ×
+      </button>
+
+      <h2>Edit Item</h2>
+      <p>Update the details of your item.</p>
+
+      <form onSubmit={handleUpdateItem}>
+        <div className="form-group">
+          <label>Item Title *</label>
+          <input
+            type="text"
+            value={editForm.title}
+            onChange={(e) =>
+              setEditForm({ ...editForm, title: e.target.value })
+            }
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Description *</label>
+          <textarea
+            value={editForm.description}
+            onChange={(e) =>
+              setEditForm({ ...editForm, description: e.target.value })
+            }
+            rows={4}
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Category *</label>
+          <select
+            value={editForm.category_id}
+            onChange={(e) =>
+              setEditForm({ ...editForm, category_id: e.target.value })
+            }
+            required
+          >
+            <option value="">Select a category</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>Condition *</label>
+          <select
+            value={editForm.condition_status}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                condition_status: e.target.value,
+              })
+            }
+            required
+          >
+            <option value="New">New</option>
+            <option value="Like New">Like New</option>
+            <option value="Good">Good</option>
+            <option value="Fair">Fair</option>
+            <option value="Poor">Poor</option>
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>Location *</label>
+          <input
+            type="text"
+            value={editForm.location}
+            onChange={(e) =>
+              setEditForm({ ...editForm, location: e.target.value })
+            }
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Desired Exchange *</label>
+          <input
+            type="text"
+            value={editForm.desired_exchange}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                desired_exchange: e.target.value,
+              })
+            }
+            required
+          />
+        </div>
+
+        {itemError && <p className="form-error">{itemError}</p>}
+
+        <div className="item-management-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setEditingItem(null)}
+            disabled={editSubmitting}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={editSubmitting}
+          >
+            {editSubmitting ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 )}
 
 {selectedTradeItem && (

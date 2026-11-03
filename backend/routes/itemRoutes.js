@@ -163,7 +163,7 @@ router.post(
         }
     }
 );
-// Get items owned by the logged-in user
+// Get available items owned by the logged-in user
 router.get("/my-items", authMiddleware, async (req, res) => {
     try {
         const [items] = await db.query(
@@ -177,6 +177,7 @@ router.get("/my-items", authMiddleware, async (req, res) => {
              JOIN users
                 ON items.user_id = users.id
              WHERE items.user_id = ?
+             AND items.status = 'Available'
              ORDER BY items.created_at DESC`,
             [req.user.id]
         );
@@ -190,7 +191,6 @@ router.get("/my-items", authMiddleware, async (req, res) => {
         });
     }
 });
-
 
 // Update an item owned by the logged-in user
 router.put("/:id", authMiddleware, async (req, res) => {

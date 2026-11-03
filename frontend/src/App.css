@@ -3767,3 +3767,183 @@ button {
     width: 100%;
   }
 }
+/* =====================================
+   BARTERHUB - PREMIUM EDIT ITEM MODAL
+===================================== */
+
+.edit-item-modal {
+  max-width: 580px;
+  padding: 36px;
+  background: linear-gradient(145deg, #ffffff, #f8fcf9);
+}
+
+.edit-item-modal > p {
+  margin-bottom: 25px;
+}
+
+.edit-item-modal form {
+  margin-top: 25px;
+}
+
+.edit-item-modal .form-group {
+  margin-bottom: 19px;
+}
+
+.edit-item-modal .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #294b3b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.edit-item-modal input,
+.edit-item-modal select,
+.edit-item-modal textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #dce9df;
+  border-radius: 12px;
+  outline: none;
+  background: #fbfdfb;
+  color: #263d31;
+  font-family: inherit;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.edit-item-modal textarea {
+  min-height: 105px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.edit-item-modal input:focus,
+.edit-item-modal select:focus,
+.edit-item-modal textarea:focus {
+  border-color: #26945d;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(38, 148, 93, 0.10);
+}
+
+.edit-item-modal .item-management-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.edit-item-modal .item-management-actions button {
+  min-height: 46px;
+  min-width: 130px;
+  padding: 0 20px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edit-item-modal .primary-button {
+  border: none;
+  background: linear-gradient(135deg, #18784b, #105b39);
+  color: white;
+  box-shadow: 0 5px 14px rgba(16, 91, 57, 0.18);
+}
+
+.edit-item-modal .primary-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(16, 91, 57, 0.25);
+}
+
+.edit-item-modal .secondary-button {
+  border: 1px solid #dce7df;
+  background: white;
+  color: #52665a;
+}
+
+.edit-item-modal .secondary-button:hover {
+  background: #f0f7f2;
+}
+
+.edit-item-modal button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .edit-item-modal {
+    padding: 26px 19px;
+  }
+
+  .edit-item-modal .item-management-actions {
+    flex-direction: column-reverse;
+  }
+
+  .edit-item-modal .item-management-actions button {
+    width: 100%;
+  }
+}
+/* MY ITEMS - EDIT AND DELETE BUTTONS */
+
+.item-management-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.item-management-actions button {
+  min-width: 95px;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* EDIT BUTTON */
+.item-management-actions .secondary-button {
+  background: #e8f5ee;
+  color: #176c48;
+  border: 1px solid #cce8d7;
+}
+
+.item-management-actions .secondary-button:hover {
+  background: #d5ecdf;
+  transform: translateY(-2px);
+}
+
+/* DELETE BUTTON */
+.item-management-actions .danger-button {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  border: 1px solid #dc2626;
+  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.16);
+}
+
+.item-management-actions .danger-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(220, 38, 38, 0.25);
+}
+
+.item-management-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .item-management-actions {
+    gap: 10px;
+  }
+
+  .item-management-actions button {
+    flex: 1;
+  }
+}
