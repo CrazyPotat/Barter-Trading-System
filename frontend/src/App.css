@@ -3333,3 +3333,47 @@ button {
   text-align: center !important;
   margin: 0 !important;
 }
+/* =====================================
+   BARTERHUB DASHBOARD LAYOUT FIX
+===================================== */
+
+@media (min-width: 761px) {
+  .dashboard-main {
+    width: calc(100% - 255px);
+    margin-left: 255px;
+    padding: 0 25px;
+  }
+
+  .dashboard-content {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 20px 0;
+  }
+
+  .welcome-section {
+    min-height: 210px;
+    padding: 28px 35px;
+  }
+
+  .stats-grid {
+    gap: 14px;
+    margin: 18px 0;
+  }
+
+  .stat-card {
+    padding: 17px;
+  }
+
+  .stat-icon {
+    margin-bottom: 12px;
+  }
+
+  .dashboard-grid {
+    gap: 16px;
+  }
+
+  .content-card {
+    padding: 20px;
+  }
+}
