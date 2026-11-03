@@ -1,28 +1,30 @@
-
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
+const cloudinary = require("cloudinary").v2;
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const db = require("../config/db");
 const authMiddleware = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// Image upload configuration
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, "../uploads"));
-    },
-    filename: (req, file, cb) => {
-        const uniqueName =
-            Date.now() + "-" + Math.round(Math.random() * 1e9);
+// Cloudinary configuration
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-        cb(
-            null,
-            uniqueName + path.extname(file.originalname).toLowerCase()
-        );
+// Cloudinary image storage
+const storage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+        folder: "barterhub/items",
+        allowed_formats: ["jpg", "jpeg", "png", "webp"],
+        resource_type: "image"
     }
 });
 
+// Image upload configuration
 const upload = multer({
     storage,
     limits: {
