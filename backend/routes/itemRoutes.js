@@ -1,3 +1,4 @@
+
 const express = require("express");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
@@ -7,14 +8,14 @@ const authMiddleware = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// Cloudinary configuration
+// CLOUDINARY CONFIGURATION
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Cloudinary image storage
+// CLOUDINARY IMAGE STORAGE
 const storage = new CloudinaryStorage({
     cloudinary,
     params: {
@@ -24,7 +25,7 @@ const storage = new CloudinaryStorage({
     }
 });
 
-// Image upload configuration
+// IMAGE UPLOAD CONFIGURATION
 const upload = multer({
     storage,
     limits: {
@@ -39,32 +40,32 @@ const upload = multer({
     }
 });
 
-// Get all categories
+// GET ALL CATEGORIES
 router.get("/categories", async (req, res) => {
     try {
-        const [categories] = await db.query(
-    `SELECT
-        id,
-        category_name AS name
-     FROM categories
-     ORDER BY category_name ASC`
-);
+        const result = await db.query(
+            `SELECT
+                id,
+                category_name AS name
+             FROM categories
+             ORDER BY category_name ASC`
+        );
 
-        res.json(categories);
+        return res.json(result.rows);
+
     } catch (error) {
         console.error("Categories error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to load categories."
         });
     }
 });
 
-
-// Get available items
+// GET ALL AVAILABLE ITEMS
 router.get("/", async (req, res) => {
     try {
-        const [items] = await db.query(`
+        const result = await db.query(`
             SELECT
                 items.*,
                 categories.category_name AS category_name,
@@ -78,19 +79,18 @@ router.get("/", async (req, res) => {
             ORDER BY items.created_at DESC
         `);
 
-        res.json(items);
+        return res.json(result.rows);
+
     } catch (error) {
         console.error("Get items error:", error);
 
-        res.status(500).json({
-            message: "Failed to load items.",
-            error: error.message
+        return res.status(500).json({
+            message: "Failed to load items."
         });
     }
 });
 
-
-// Add a new item (login required)
+// ADD A NEW ITEM
 router.post(
     "/",
     authMiddleware,
@@ -119,11 +119,23 @@ router.post(
                 });
             }
 
-            const image = req.file
-    ? req.file.path
-    : null;
+            const validConditions = [
+                "New",
+                "Like New",
+                "Good",
+                "Fair",
+                "Poor"
+            ];
 
-            const [result] = await db.query(
+            if (!validConditions.includes(condition_status)) {
+                return res.status(400).json({
+                    message: "Invalid item condition."
+                });
+            }
+
+            const image = req.file ? req.file.path : null;
+
+            const result = await db.query(
                 `INSERT INTO items
                 (
                     user_id,
@@ -136,7 +148,8 @@ router.post(
                     desired_exchange,
                     status
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Available')`,
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Available')
+                RETURNING id`,
                 [
                     req.user.id,
                     category_id,
@@ -149,24 +162,26 @@ router.post(
                 ]
             );
 
-            res.status(201).json({
+            return res.status(201).json({
                 message: "Item posted successfully!",
-                item_id: result.insertId,
+                item_id: result.rows[0].id,
                 image
             });
+
         } catch (error) {
             console.error("Add item error:", error);
 
-            res.status(500).json({
+            return res.status(500).json({
                 message: "Failed to post item."
             });
         }
     }
 );
-// Get available items owned by the logged-in user
+
+// GET AVAILABLE ITEMS OWNED BY LOGGED-IN USER
 router.get("/my-items", authMiddleware, async (req, res) => {
     try {
-        const [items] = await db.query(
+        const result = await db.query(
             `SELECT
                 items.*,
                 categories.category_name AS category_name,
@@ -176,23 +191,24 @@ router.get("/my-items", authMiddleware, async (req, res) => {
                 ON items.category_id = categories.id
              JOIN users
                 ON items.user_id = users.id
-             WHERE items.user_id = ?
+             WHERE items.user_id = $1
              AND items.status = 'Available'
              ORDER BY items.created_at DESC`,
             [req.user.id]
         );
 
-        res.json(items);
+        return res.json(result.rows);
+
     } catch (error) {
         console.error("Get my items error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to retrieve your items."
         });
     }
 });
 
-// Update an item owned by the logged-in user
+// UPDATE AN ITEM
 router.put("/:id", authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
@@ -233,18 +249,19 @@ router.put("/:id", authMiddleware, async (req, res) => {
             });
         }
 
-        const [result] = await db.query(
+        const result = await db.query(
             `UPDATE items
              SET
-                category_id = ?,
-                title = ?,
-                description = ?,
-                condition_status = ?,
-                location = ?,
-                desired_exchange = ?
-             WHERE id = ?
-             AND user_id = ?
-             AND status = 'Available'`,
+                category_id = $1,
+                title = $2,
+                description = $3,
+                condition_status = $4,
+                location = $5,
+                desired_exchange = $6
+             WHERE id = $7
+             AND user_id = $8
+             AND status = 'Available'
+             RETURNING id`,
             [
                 category_id,
                 title.trim(),
@@ -257,55 +274,76 @@ router.put("/:id", authMiddleware, async (req, res) => {
             ]
         );
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).json({
                 message: "Item not found, not owned by you, or unavailable for editing."
             });
         }
 
-        res.json({
+        return res.json({
             message: "Item updated successfully!"
         });
+
     } catch (error) {
         console.error("Update item error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to update item."
         });
     }
 });
 
-
-// Soft-delete an item owned by the logged-in user
+// SOFT DELETE AN ITEM
 router.delete("/:id", authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
 
-        const [result] = await db.query(
+        const result = await db.query(
             `UPDATE items
              SET status = 'Inactive'
-             WHERE id = ?
-             AND user_id = ?
-             AND status = 'Available'`,
+             WHERE id = $1
+             AND user_id = $2
+             AND status = 'Available'
+             RETURNING id`,
             [id, req.user.id]
         );
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).json({
                 message: "Item not found, not owned by you, or unavailable for deletion."
             });
         }
 
-        res.json({
+        return res.json({
             message: "Item deleted successfully!"
         });
+
     } catch (error) {
         console.error("Delete item error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to delete item."
         });
     }
+});
+
+// HANDLE UPLOAD ERRORS
+router.use((error, req, res, next) => {
+    if (error instanceof multer.MulterError) {
+        return res.status(400).json({
+            message: error.code === "LIMIT_FILE_SIZE"
+                ? "Image must not exceed 5MB."
+                : error.message
+        });
+    }
+
+    if (error) {
+        return res.status(400).json({
+            message: error.message
+        });
+    }
+
+    next();
 });
 
 module.exports = router;

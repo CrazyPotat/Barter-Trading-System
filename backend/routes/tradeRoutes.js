@@ -12,7 +12,7 @@ router.get("/proposals", authMiddleware, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const [proposals] = await db.query(
+        const result = await db.query(
             `SELECT
                 tp.*,
                 proposer.full_name AS proposer_name,
@@ -26,22 +26,21 @@ router.get("/proposals", authMiddleware, async (req, res) => {
              JOIN users receiver ON tp.receiver_id = receiver.id
              JOIN items offered ON tp.offered_item_id = offered.id
              JOIN items requested ON tp.requested_item_id = requested.id
-             WHERE tp.proposer_id = ? OR tp.receiver_id = ?
+             WHERE tp.proposer_id = $1 OR tp.receiver_id = $1
              ORDER BY tp.created_at DESC`,
-            [userId, userId]
+            [userId]
         );
 
-        res.json(proposals);
+        return res.json(result.rows);
 
     } catch (error) {
         console.error("GET PROPOSALS ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to retrieve trade proposals."
         });
     }
 });
-
 
 // =====================================
 // SEND TRADE PROPOSAL
@@ -68,44 +67,42 @@ router.post("/proposals", authMiddleware, async (req, res) => {
             });
         }
 
-        // Check offered item
-        const [offeredItems] = await db.query(
+        const offeredResult = await db.query(
             `SELECT id, user_id, status
              FROM items
-             WHERE id = ?`,
+             WHERE id = $1`,
             [offered_item_id]
         );
 
         if (
-            offeredItems.length === 0 ||
-            Number(offeredItems[0].user_id) !== Number(proposerId)
+            offeredResult.rows.length === 0 ||
+            Number(offeredResult.rows[0].user_id) !== Number(proposerId)
         ) {
             return res.status(403).json({
                 message: "The offered item does not belong to you."
             });
         }
 
-        if (offeredItems[0].status !== "Available") {
+        if (offeredResult.rows[0].status !== "Available") {
             return res.status(400).json({
                 message: "Your offered item is not available."
             });
         }
 
-        // Check requested item
-        const [requestedItems] = await db.query(
+        const requestedResult = await db.query(
             `SELECT id, user_id, status
              FROM items
-             WHERE id = ?`,
+             WHERE id = $1`,
             [requested_item_id]
         );
 
-        if (requestedItems.length === 0) {
+        if (requestedResult.rows.length === 0) {
             return res.status(404).json({
                 message: "Requested item not found."
             });
         }
 
-        const requestedItem = requestedItems[0];
+        const requestedItem = requestedResult.rows[0];
 
         if (Number(requestedItem.user_id) === Number(proposerId)) {
             return res.status(400).json({
@@ -121,27 +118,27 @@ router.post("/proposals", authMiddleware, async (req, res) => {
 
         const receiverId = requestedItem.user_id;
 
-        // Prevent duplicate pending proposals
-        const [existing] = await db.query(
+        const existing = await db.query(
             `SELECT id
              FROM trade_proposals
-             WHERE proposer_id = ?
-             AND requested_item_id = ?
+             WHERE proposer_id = $1
+             AND requested_item_id = $2
              AND status = 'Pending'`,
             [proposerId, requested_item_id]
         );
 
-        if (existing.length > 0) {
+        if (existing.rows.length > 0) {
             return res.status(409).json({
                 message: "You already have a pending proposal for this item."
             });
         }
 
-        const [result] = await db.query(
+        const result = await db.query(
             `INSERT INTO trade_proposals
                 (proposer_id, receiver_id, offered_item_id,
                  requested_item_id, message)
-             VALUES (?, ?, ?, ?, ?)`,
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id`,
             [
                 proposerId,
                 receiverId,
@@ -150,67 +147,71 @@ router.post("/proposals", authMiddleware, async (req, res) => {
                 message || null
             ]
         );
-        // CREATE NOTIFICATION FOR RECEIVER
-await db.query(
-    `INSERT INTO notifications
-        (user_id, title, message, notification_type)
-     VALUES (?, ?, ?, ?)`,
-    [
-        receiverId,
-        "New Trade Proposal",
-        "Someone has sent you a trade proposal. Check your proposals!",
-        "trade"
-    ]
-);
 
-        res.status(201).json({
+        await db.query(
+            `INSERT INTO notifications
+                (user_id, title, message, notification_type)
+             VALUES ($1, $2, $3, $4)`,
+            [
+                receiverId,
+                "New Trade Proposal",
+                "Someone has sent you a trade proposal. Check your proposals!",
+                "trade"
+            ]
+        );
+
+        return res.status(201).json({
             message: "Trade proposal sent successfully!",
-            proposal_id: result.insertId
+            proposal_id: result.rows[0].id
         });
 
     } catch (error) {
         console.error("SEND PROPOSAL ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to send trade proposal."
         });
     }
 });
 
-
 // =====================================
 // ACCEPT TRADE PROPOSAL
 // =====================================
 router.patch("/proposals/:id/accept", authMiddleware, async (req, res) => {
-    let connection;
+    let client;
+    let transactionStarted = false;
 
     try {
-        connection = await db.getConnection();
-        await connection.beginTransaction();
+        client = await db.connect();
+
+        await client.query("BEGIN");
+        transactionStarted = true;
 
         const proposalId = req.params.id;
         const userId = req.user.id;
 
-        const [proposals] = await connection.query(
+        const proposalResult = await client.query(
             `SELECT *
              FROM trade_proposals
-             WHERE id = ?
+             WHERE id = $1
              FOR UPDATE`,
             [proposalId]
         );
 
-        if (proposals.length === 0) {
-            await connection.rollback();
+        if (proposalResult.rows.length === 0) {
+            await client.query("ROLLBACK");
+            transactionStarted = false;
 
             return res.status(404).json({
                 message: "Trade proposal not found."
             });
         }
 
-        const proposal = proposals[0];
+        const proposal = proposalResult.rows[0];
 
         if (Number(proposal.receiver_id) !== Number(userId)) {
-            await connection.rollback();
+            await client.query("ROLLBACK");
+            transactionStarted = false;
 
             return res.status(403).json({
                 message: "You are not authorized to accept this proposal."
@@ -218,7 +219,8 @@ router.patch("/proposals/:id/accept", authMiddleware, async (req, res) => {
         }
 
         if (proposal.status !== "Pending") {
-            await connection.rollback();
+            await client.query("ROLLBACK");
+            transactionStarted = false;
 
             return res.status(400).json({
                 message: "This proposal is no longer pending."
@@ -231,73 +233,83 @@ router.patch("/proposals/:id/accept", authMiddleware, async (req, res) => {
             proposal.requested_item_id
         ].sort((a, b) => a - b);
 
-        const [items] = await connection.query(
+        const itemsResult = await client.query(
             `SELECT id, user_id, status
              FROM items
-             WHERE id IN (?, ?)
+             WHERE id = ANY($1::integer[])
              ORDER BY id
              FOR UPDATE`,
-            itemIds
+            [itemIds]
         );
 
         if (
-            items.length !== 2 ||
-            items.some(item => item.status !== "Available")
+            itemsResult.rows.length !== 2 ||
+            itemsResult.rows.some(item => item.status !== "Available")
         ) {
-            await connection.rollback();
+            await client.query("ROLLBACK");
+            transactionStarted = false;
 
             return res.status(400).json({
                 message: "One or both items are no longer available."
             });
         }
 
-        await connection.query(
+        await client.query(
             `UPDATE trade_proposals
              SET status = 'Accepted'
-             WHERE id = ?`,
+             WHERE id = $1`,
             [proposalId]
         );
 
-        const [tradeResult] = await connection.query(
+        const tradeResult = await client.query(
             `INSERT INTO trades (proposal_id, status)
-             VALUES (?, 'Agreed')`,
+             VALUES ($1, 'Agreed')
+             RETURNING id`,
             [proposalId]
         );
-        await connection.query(
-    `INSERT INTO trade_history
-        (trade_id, actor_id, previous_status, new_status, remarks)
-     VALUES (?, ?, ?, ?, ?)`,
-    [
-        tradeResult.insertId,
-        userId,
-        null,
-        "Agreed",
-        "Trade proposal accepted."
-    ]
-);
 
-        await connection.commit();
+        const tradeId = tradeResult.rows[0].id;
 
-        res.json({
+        await client.query(
+            `INSERT INTO trade_history
+                (trade_id, actor_id, previous_status, new_status, remarks)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [
+                tradeId,
+                userId,
+                null,
+                "Agreed",
+                "Trade proposal accepted."
+            ]
+        );
+
+        await client.query("COMMIT");
+        transactionStarted = false;
+
+        return res.json({
             message: "Trade proposal accepted successfully!",
-            trade_id: tradeResult.insertId,
+            trade_id: tradeId,
             status: "Agreed"
         });
 
     } catch (error) {
-        if (connection) await connection.rollback();
+        if (client && transactionStarted) {
+            await client.query("ROLLBACK").catch(console.error);
+            transactionStarted = false;
+        }
 
         console.error("ACCEPT PROPOSAL ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to accept trade proposal."
         });
 
     } finally {
-        if (connection) connection.release();
+        if (client) {
+            client.release();
+        }
     }
 });
-
 
 // =====================================
 // DECLINE TRADE PROPOSAL
@@ -307,29 +319,30 @@ router.patch("/proposals/:id/decline", authMiddleware, async (req, res) => {
         const proposalId = req.params.id;
         const userId = req.user.id;
 
-        const [result] = await db.query(
+        const result = await db.query(
             `UPDATE trade_proposals
              SET status = 'Declined'
-             WHERE id = ?
-             AND receiver_id = ?
-             AND status = 'Pending'`,
+             WHERE id = $1
+             AND receiver_id = $2
+             AND status = 'Pending'
+             RETURNING id`,
             [proposalId, userId]
         );
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).json({
                 message: "Pending proposal not found or you are not authorized."
             });
         }
 
-        res.json({
+        return res.json({
             message: "Trade proposal declined successfully!"
         });
 
     } catch (error) {
         console.error("DECLINE PROPOSAL ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to decline trade proposal."
         });
     }
@@ -339,25 +352,29 @@ router.patch("/proposals/:id/decline", authMiddleware, async (req, res) => {
 // UPDATE TRADE STATUS
 // =====================================
 router.patch("/:id/status", authMiddleware, async (req, res) => {
-    let connection;
+    let client;
+    let transactionStarted = false;
 
     try {
-        connection = await db.getConnection();
-        await connection.beginTransaction();
+        client = await db.connect();
+
+        await client.query("BEGIN");
+        transactionStarted = true;
 
         const tradeId = req.params.id;
         const userId = req.user.id;
         const { status, remarks } = req.body;
 
         if (!["Exchanged", "Completed"].includes(status)) {
-            await connection.rollback();
+            await client.query("ROLLBACK");
+            transactionStarted = false;
+
             return res.status(400).json({
                 message: "Invalid trade status."
             });
         }
 
-        // Check trade and its participants
-        const [trades] = await connection.query(
+        const tradesResult = await client.query(
             `SELECT
                 t.id,
                 t.status,
@@ -366,55 +383,58 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
              FROM trades t
              JOIN trade_proposals tp
                 ON t.proposal_id = tp.id
-             WHERE t.id = ?
-             FOR UPDATE`,
+             WHERE t.id = $1
+             FOR UPDATE OF t`,
             [tradeId]
         );
 
-        if (trades.length === 0) {
-            await connection.rollback();
+        if (tradesResult.rows.length === 0) {
+            await client.query("ROLLBACK");
+            transactionStarted = false;
+
             return res.status(404).json({
                 message: "Trade not found."
             });
         }
 
-        const trade = trades[0];
+        const trade = tradesResult.rows[0];
 
         const isParticipant =
             Number(trade.proposer_id) === Number(userId) ||
             Number(trade.receiver_id) === Number(userId);
 
         if (!isParticipant) {
-            await connection.rollback();
+            await client.query("ROLLBACK");
+            transactionStarted = false;
+
             return res.status(403).json({
                 message: "You are not part of this trade."
             });
         }
 
-        // First confirmation: Agreed -> Exchanged
-        if (status === "Exchanged") {
-            if (trade.status !== "Agreed") {
-                await connection.rollback();
-                return res.status(400).json({
-                    message: "Only agreed trades can be marked as exchanged."
-                });
-            }
+        if (status === "Exchanged" && trade.status !== "Agreed") {
+            await client.query("ROLLBACK");
+            transactionStarted = false;
+
+            return res.status(400).json({
+                message: "Only agreed trades can be marked as exchanged."
+            });
         }
 
-        // Second confirmation: Exchanged -> Completed
         if (status === "Completed") {
             if (trade.status !== "Exchanged") {
-                await connection.rollback();
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+
                 return res.status(400).json({
                     message: "Trade must be marked Exchanged first."
                 });
             }
 
-            // Require the other participant to confirm
-            const [previousUpdates] = await connection.query(
+            const previousUpdates = await client.query(
                 `SELECT actor_id
                  FROM trade_history
-                 WHERE trade_id = ?
+                 WHERE trade_id = $1
                  AND new_status = 'Exchanged'
                  ORDER BY created_at DESC, id DESC
                  LIMIT 1`,
@@ -422,10 +442,12 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
             );
 
             if (
-                previousUpdates.length === 0 ||
-                Number(previousUpdates[0].actor_id) === Number(userId)
+                previousUpdates.rows.length === 0 ||
+                Number(previousUpdates.rows[0].actor_id) === Number(userId)
             ) {
-                await connection.rollback();
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+
                 return res.status(400).json({
                     message: "The other participant must confirm the completion."
                 });
@@ -434,21 +456,21 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
 
         const previousStatus = trade.status;
 
-        await connection.query(
+        await client.query(
             `UPDATE trades
-             SET status = ?,
+             SET status = $1,
                  completed_at = CASE
-                    WHEN ? = 'Completed' THEN CURRENT_TIMESTAMP
+                    WHEN $1 = 'Completed' THEN CURRENT_TIMESTAMP
                     ELSE completed_at
                  END
-             WHERE id = ?`,
-            [status, status, tradeId]
+             WHERE id = $2`,
+            [status, tradeId]
         );
 
-        await connection.query(
+        await client.query(
             `INSERT INTO trade_history
                 (trade_id, actor_id, previous_status, new_status, remarks)
-             VALUES (?, ?, ?, ?, ?)`,
+             VALUES ($1, $2, $3, $4, $5)`,
             [
                 tradeId,
                 userId,
@@ -458,9 +480,10 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
             ]
         );
 
-        await connection.commit();
+        await client.query("COMMIT");
+        transactionStarted = false;
 
-        res.json({
+        return res.json({
             message: `Trade status updated to ${status}!`,
             trade_id: tradeId,
             previous_status: previousStatus,
@@ -468,18 +491,24 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
         });
 
     } catch (error) {
-        if (connection) await connection.rollback();
+        if (client && transactionStarted) {
+            await client.query("ROLLBACK").catch(console.error);
+            transactionStarted = false;
+        }
 
         console.error("UPDATE TRADE STATUS ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to update trade status."
         });
 
     } finally {
-        if (connection) connection.release();
+        if (client) {
+            client.release();
+        }
     }
 });
+
 // =====================================
 // GET TRADE HISTORY
 // =====================================
@@ -487,7 +516,7 @@ router.get("/history", authMiddleware, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const [history] = await db.query(
+        const result = await db.query(
             `SELECT
                 th.id AS history_id,
                 th.trade_id,
@@ -510,17 +539,17 @@ router.get("/history", authMiddleware, async (req, res) => {
              JOIN users receiver ON tp.receiver_id = receiver.id
              JOIN items offered ON tp.offered_item_id = offered.id
              JOIN items requested ON tp.requested_item_id = requested.id
-             WHERE tp.proposer_id = ? OR tp.receiver_id = ?
+             WHERE tp.proposer_id = $1 OR tp.receiver_id = $1
              ORDER BY th.created_at DESC`,
-            [userId, userId]
+            [userId]
         );
 
-        res.json(history);
+        return res.json(result.rows);
 
     } catch (error) {
         console.error("GET TRADE HISTORY ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to retrieve trade history."
         });
     }

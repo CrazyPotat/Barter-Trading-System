@@ -26,7 +26,8 @@ const storage = multer.diskStorage({
     },
     filename: (req, file, cb) => {
         const uniqueName =
-            Date.now() + "-" +
+            Date.now() +
+            "-" +
             Math.round(Math.random() * 1E9) +
             path.extname(file.originalname).toLowerCase();
 
@@ -75,12 +76,12 @@ router.post("/register", async (req, res) => {
 
         const normalizedEmail = email.trim().toLowerCase();
 
-        const [existingUsers] = await db.query(
-            "SELECT id FROM users WHERE email = ?",
+        const existingUsers = await db.query(
+            "SELECT id FROM users WHERE email = $1",
             [normalizedEmail]
         );
 
-        if (existingUsers.length > 0) {
+        if (existingUsers.rows.length > 0) {
             return res.status(409).json({
                 message: "Email is already registered."
             });
@@ -88,16 +89,21 @@ router.post("/register", async (req, res) => {
 
         const passwordHash = await bcrypt.hash(password, 10);
 
-        const [result] = await db.query(
+        const result = await db.query(
             `INSERT INTO users (full_name, email, password_hash)
-             VALUES (?, ?, ?)`,
-            [full_name.trim(), normalizedEmail, passwordHash]
+             VALUES ($1, $2, $3)
+             RETURNING id`,
+            [
+                full_name.trim(),
+                normalizedEmail,
+                passwordHash
+            ]
         );
 
-        res.status(201).json({
+        return res.status(201).json({
             message: "Account registered successfully!",
             user: {
-                id: result.insertId,
+                id: result.rows[0].id,
                 full_name: full_name.trim(),
                 email: normalizedEmail
             }
@@ -106,7 +112,13 @@ router.post("/register", async (req, res) => {
     } catch (error) {
         console.error("Registration error:", error);
 
-        res.status(500).json({
+        if (error.code === "23505") {
+            return res.status(409).json({
+                message: "Email is already registered."
+            });
+        }
+
+        return res.status(500).json({
             message: "Registration failed."
         });
     }
@@ -125,20 +137,20 @@ router.post("/login", async (req, res) => {
 
         const normalizedEmail = email.trim().toLowerCase();
 
-        const [users] = await db.query(
+        const result = await db.query(
             `SELECT id, full_name, email, password_hash, role
              FROM users
-             WHERE email = ?`,
+             WHERE email = $1`,
             [normalizedEmail]
         );
 
-        if (users.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(401).json({
                 message: "Invalid email or password."
             });
         }
 
-        const user = users[0];
+        const user = result.rows[0];
 
         const passwordMatch = await bcrypt.compare(
             password,
@@ -165,7 +177,7 @@ router.post("/login", async (req, res) => {
             { expiresIn: "1d" }
         );
 
-        res.json({
+        return res.json({
             message: "Login successful!",
             token,
             user: {
@@ -179,7 +191,7 @@ router.post("/login", async (req, res) => {
     } catch (error) {
         console.error("Login error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Login failed."
         });
     }
@@ -188,29 +200,29 @@ router.post("/login", async (req, res) => {
 // GET PROFILE
 router.get("/profile", authMiddleware, async (req, res) => {
     try {
-        const [users] = await db.query(
+        const result = await db.query(
             `SELECT id, full_name, email, profile_image,
                     location, bio, role, created_at
              FROM users
-             WHERE id = ?`,
+             WHERE id = $1`,
             [req.user.id]
         );
 
-        if (users.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(404).json({
                 message: "User profile not found."
             });
         }
 
-        res.json({
+        return res.json({
             message: "Profile retrieved successfully!",
-            user: users[0]
+            user: result.rows[0]
         });
 
     } catch (error) {
         console.error("Get profile error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to retrieve profile."
         });
     }
@@ -231,51 +243,58 @@ router.put(
                 });
             }
 
-            let sql = `
-                UPDATE users
-                SET full_name = ?, location = ?, bio = ?
-            `;
-
             const values = [
                 full_name.trim(),
                 location?.trim() || null,
                 bio?.trim() || null
             ];
 
+            let sql = `
+                UPDATE users
+                SET full_name = $1,
+                    location = $2,
+                    bio = $3
+            `;
+
             if (req.file) {
-                sql += ", profile_image = ?";
-                values.push(
-                    `/uploads/profile/${req.file.filename}`
-                );
+                values.push(`/uploads/profile/${req.file.filename}`);
+                sql += `, profile_image = $${values.length}`;
             }
 
-            sql += " WHERE id = ?";
             values.push(req.user.id);
+            sql += ` WHERE id = $${values.length}`;
 
             await db.query(sql, values);
 
-            const [updatedUsers] = await db.query(
+            const updatedUsers = await db.query(
                 `SELECT id, full_name, email, profile_image,
                         location, bio, role, created_at
                  FROM users
-                 WHERE id = ?`,
+                 WHERE id = $1`,
                 [req.user.id]
             );
 
-            res.json({
+            if (updatedUsers.rows.length === 0) {
+                return res.status(404).json({
+                    message: "User profile not found."
+                });
+            }
+
+            return res.json({
                 message: "Profile updated successfully!",
-                user: updatedUsers[0]
+                user: updatedUsers.rows[0]
             });
 
         } catch (error) {
             console.error("Update profile error:", error);
 
-            res.status(500).json({
+            return res.status(500).json({
                 message: "Failed to update profile."
             });
         }
     }
 );
+
 // CHANGE PASSWORD
 router.put("/change-password", authMiddleware, async (req, res) => {
     try {
@@ -309,12 +328,12 @@ router.put("/change-password", authMiddleware, async (req, res) => {
             });
         }
 
-        const [users] = await db.query(
-            "SELECT password_hash FROM users WHERE id = ?",
+        const result = await db.query(
+            "SELECT password_hash FROM users WHERE id = $1",
             [req.user.id]
         );
 
-        if (users.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(404).json({
                 message: "User account not found."
             });
@@ -322,7 +341,7 @@ router.put("/change-password", authMiddleware, async (req, res) => {
 
         const passwordMatch = await bcrypt.compare(
             current_password,
-            users[0].password_hash
+            result.rows[0].password_hash
         );
 
         if (!passwordMatch) {
@@ -334,22 +353,23 @@ router.put("/change-password", authMiddleware, async (req, res) => {
         const newPasswordHash = await bcrypt.hash(new_password, 10);
 
         await db.query(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
+            "UPDATE users SET password_hash = $1 WHERE id = $2",
             [newPasswordHash, req.user.id]
         );
 
-        res.json({
+        return res.json({
             message: "Password changed successfully!"
         });
 
     } catch (error) {
         console.error("Change password error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to change password."
         });
     }
 });
+
 // HANDLE UPLOAD ERRORS
 router.use((error, req, res, next) => {
     if (error instanceof multer.MulterError) {
